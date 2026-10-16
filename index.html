@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Smart Remind - Cloud Reminder & Expiry Manager</title>
+  <title>RemindPulse - Multi-Device Cloud Reminders & Expiry</title>
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -102,6 +102,18 @@
             <span id="cloud-status-text-side" class="text-slate-500 dark:text-slate-400 truncate">Connecting Firebase...</span>
           </div>
         </div>
+      </div>
+
+      <!-- User Account Widget -->
+      <div onclick="openAuthModal()" class="cursor-pointer mb-4 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 hover:border-brand-500/60 transition group flex items-center gap-3">
+        <div id="side-user-avatar" class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 text-brand-600 dark:text-brand-300 font-bold flex items-center justify-center text-xs shrink-0 border border-indigo-200 dark:border-indigo-800">
+          <i data-lucide="user" class="w-4 h-4"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div id="side-user-name" class="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">Guest / Anonymous</div>
+          <div id="side-user-email" class="text-[10px] text-slate-500 dark:text-slate-400 truncate">Click to Login & Sync</div>
+        </div>
+        <i data-lucide="log-in" id="side-auth-action-icon" class="w-4 h-4 text-slate-400 group-hover:text-brand-600 transition shrink-0"></i>
       </div>
 
       <!-- Quick Add New Reminder Primary Button -->
@@ -227,9 +239,9 @@
           <!-- Title & Live Time -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <div class="md:hidden w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center text-white shrink-0">
-                <i data-lucide="bell" class="w-4 h-4"></i>
-              </div>
+              <button onclick="openAuthModal()" class="md:hidden w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center text-white shrink-0 overflow-hidden" id="mobile-auth-avatar-btn">
+                <i data-lucide="user" class="w-4 h-4"></i>
+              </button>
               <div>
                 <h2 id="current-view-heading" class="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">All Reminders</h2>
                 <div class="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
@@ -241,8 +253,10 @@
             </div>
 
             <!-- Mobile Action Shortcuts -->
-            <div class="flex items-center gap-1 md:hidden">
-              <span id="cloud-status-dot-mobile" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse inline-block mr-1"></span>
+            <div class="flex items-center gap-1.5 md:hidden">
+              <button onclick="openAuthModal()" id="mobile-login-pill" class="px-2 py-1 rounded-lg text-[11px] font-semibold bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+                Log In
+              </button>
               <button onclick="openReminderModal()" class="py-1.5 px-3 bg-brand-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 <span>New</span>
@@ -253,11 +267,12 @@
           <!-- PRIMARY ACTION BUTTONS TOOLBAR -->
           <div class="flex items-center flex-wrap gap-2">
             
-            <!-- Real-time Cloud Indicator Pill -->
-            <div id="btn-cloud-status" class="hidden sm:flex items-center gap-2 py-1.5 px-3 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+            <!-- Real-time Cloud Indicator Pill & Account Button -->
+            <button onclick="openAuthModal()" id="btn-cloud-status" class="hidden sm:flex items-center gap-2 py-1.5 px-3 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition">
               <span id="cloud-status-dot-header" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
               <span id="cloud-status-text-header">Firebase Syncing...</span>
-            </div>
+              <span id="header-user-tag" class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300">Login</span>
+            </button>
 
             <!-- Import Excel Button -->
             <label for="excel-file-input" class="cursor-pointer py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 shadow-sm transition active:scale-95">
@@ -397,6 +412,91 @@
     </main>
   </div>
 
+  <!-- AUTHENTICATION / MULTI-DEVICE LOGIN MODAL -->
+  <div id="auth-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
+      
+      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Logged In State Screen -->
+      <div id="auth-view-profile" class="hidden flex-col items-center text-center py-2">
+        <div id="profile-avatar-circle" class="w-16 h-16 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-500 text-white font-bold text-2xl flex items-center justify-center shadow-lg shadow-brand-500/25 mb-3 border-2 border-white dark:border-slate-800">
+          U
+        </div>
+        <h3 id="profile-name-text" class="text-base font-bold text-slate-900 dark:text-white">User Name</h3>
+        <p id="profile-email-text" class="text-xs text-slate-500 dark:text-slate-400 mb-4">user@example.com</p>
+
+        <div class="w-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2.5 mb-5 text-left">
+          <i data-lucide="shield-check" class="w-5 h-5 shrink-0 text-emerald-600"></i>
+          <div>
+            <strong class="block">Multi-Device Cloud Sync Active</strong>
+            <span>Sign in with this exact email on your phone, tablet, or PC to view and edit these reminders in real-time.</span>
+          </div>
+        </div>
+
+        <button onclick="handleSignOut()" class="w-full py-2.5 px-4 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+          <span>Sign Out / Switch Account</span>
+        </button>
+      </div>
+
+      <!-- Log In / Sign Up Form Screen -->
+      <div id="auth-view-login">
+        <div class="text-center mb-5">
+          <div class="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950/80 text-brand-600 dark:text-brand-300 mx-auto flex items-center justify-center mb-2">
+            <i data-lucide="smartphone-nfc" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white">Multi-Device Cloud Access</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Log in so your reminders stay automatically synced across your mobile, desktop, and other devices.</p>
+        </div>
+
+        <!-- Google One-Click Login -->
+        <button onclick="handleGoogleSignIn()" class="w-full py-2.5 px-4 mb-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm transition active:scale-98">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>Continue with Google</span>
+        </button>
+
+        <div class="relative flex py-2 items-center mb-3">
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+          <span class="flex-shrink mx-3 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Or Email</span>
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+        </div>
+
+        <form id="email-auth-form" onsubmit="handleEmailAuthSubmit(event)" class="space-y-3">
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Email</label>
+            <input type="email" id="auth-email" required placeholder="name@company.com" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Password</label>
+            <input type="password" id="auth-password" required minlength="6" placeholder="At least 6 characters" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" id="btn-auth-signin" onclick="window.authMode = 'signin'" class="flex-1 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl text-xs transition shadow-md shadow-brand-600/20">
+              Sign In
+            </button>
+            <button type="submit" id="btn-auth-signup" onclick="window.authMode = 'signup'" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl text-xs transition">
+              Create Account
+            </button>
+          </div>
+        </form>
+
+        <p class="text-[11px] text-slate-400 text-center mt-4">
+          Note: Your existing reminders will be safely preserved when you sign in!
+        </p>
+      </div>
+
+    </div>
+  </div>
+
   <!-- MOBILE BOTTOM STICKY QUICK NAVIGATION -->
   <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-around shadow-2xl">
     <button onclick="switchHorizonFilter('all')" class="flex flex-col items-center gap-1 text-brand-600 dark:text-brand-400 p-1">
@@ -414,13 +514,13 @@
       <i data-lucide="calendar" class="w-5 h-5"></i>
       <span class="text-[10px] font-medium">Calendar</span>
     </button>
-    <button onclick="switchHorizonFilter('expired')" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
-      <i data-lucide="alert-octagon" class="w-5 h-5"></i>
-      <span class="text-[10px] font-medium">Expired</span>
+    <button onclick="openAuthModal()" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Account</span>
     </button>
   </nav>
 
-  <!-- CREATE / EDIT REMINDER MODAL (Strictly 5 Fields, No Category/Chime) -->
+  <!-- CREATE / EDIT REMINDER MODAL -->
   <div id="reminder-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl transform transition-all my-8">
       
@@ -612,11 +712,29 @@
     </div>
   </div>
 
-  <!-- FIREBASE V11 INTEGRATION SCRIPT -->
+  <!-- FIREBASE INTEGRATION & AUTH SCRIPT -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { 
+      getAuth, 
+      signInAnonymously, 
+      signInWithPopup, 
+      GoogleAuthProvider, 
+      signInWithEmailAndPassword, 
+      createUserWithEmailAndPassword, 
+      signOut, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+      getFirestore, 
+      doc, 
+      setDoc, 
+      deleteDoc, 
+      collection, 
+      onSnapshot, 
+      writeBatch,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // User's exact Firebase Project Configuration
     const firebaseConfig = {
@@ -653,6 +771,7 @@
     window.pendingWorkbook = null;
     window.pendingFileName = '';
     window.confirmCallback = null;
+    window.authMode = 'signin';
 
     // Web Audio Synthesizer
     let audioCtx = null;
@@ -717,6 +836,58 @@
       if (sideText) sideText.textContent = label;
     }
 
+    function updateAuthUI(user) {
+      const sideName = document.getElementById('side-user-name');
+      const sideEmail = document.getElementById('side-user-email');
+      const sideAvatar = document.getElementById('side-user-avatar');
+      const headerTag = document.getElementById('header-user-tag');
+      const mobilePill = document.getElementById('mobile-login-pill');
+      const authIcon = document.getElementById('side-auth-action-icon');
+
+      const profileView = document.getElementById('auth-view-profile');
+      const loginView = document.getElementById('auth-view-login');
+      const profileName = document.getElementById('profile-name-text');
+      const profileEmail = document.getElementById('profile-email-text');
+      const profileAvatar = document.getElementById('profile-avatar-circle');
+
+      if (user && !user.isAnonymous) {
+        const displayName = user.displayName || user.email.split('@')[0];
+        const initial = displayName.charAt(0).toUpperCase();
+
+        if (sideName) sideName.textContent = displayName;
+        if (sideEmail) sideEmail.textContent = user.email;
+        if (sideAvatar) sideAvatar.innerHTML = `<span>${initial}</span>`;
+        if (headerTag) {
+          headerTag.textContent = displayName;
+          headerTag.className = 'ml-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold';
+        }
+        if (mobilePill) mobilePill.textContent = displayName;
+        if (authIcon) authIcon.setAttribute('data-lucide', 'user-check');
+
+        if (profileView) profileView.classList.remove('hidden');
+        if (loginView) loginView.classList.add('hidden');
+        if (profileName) profileName.textContent = displayName;
+        if (profileEmail) profileEmail.textContent = user.email;
+        if (profileAvatar) profileAvatar.textContent = initial;
+
+      } else {
+        if (sideName) sideName.textContent = 'Guest / Anonymous';
+        if (sideEmail) sideEmail.textContent = 'Sign in to sync across devices';
+        if (sideAvatar) sideAvatar.innerHTML = '<i data-lucide="user" class="w-4 h-4"></i>';
+        if (headerTag) {
+          headerTag.textContent = 'Log In (Sync)';
+          headerTag.className = 'ml-1 text-[10px] px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 font-bold';
+        }
+        if (mobilePill) mobilePill.textContent = 'Log In';
+        if (authIcon) authIcon.setAttribute('data-lucide', 'log-in');
+
+        if (profileView) profileView.classList.add('hidden');
+        if (loginView) loginView.classList.remove('hidden');
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
     async function initFirebase() {
       updateSyncStatus('connecting', 'Connecting...');
       loadLocalCache();
@@ -726,39 +897,40 @@
         fbAuth = getAuth(fbApp);
         fbDb = getFirestore(fbApp);
 
-        // Immediate anonymous authentication
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(fbAuth, __initial_auth_token);
-        } else {
-          await signInAnonymously(fbAuth);
-        }
-
-        onAuthStateChanged(fbAuth, (user) => {
+        onAuthStateChanged(fbAuth, async (user) => {
           if (user) {
             currentUser = user;
             isCloudActive = true;
-            updateSyncStatus('connected', 'Cloud Synced');
-            listenToFirestore();
+            updateSyncStatus('connected', user.isAnonymous ? 'Connected (Anonymous)' : 'Multi-Device Synced');
+            updateAuthUI(user);
+            await listenToFirestore();
           } else {
-            currentUser = null;
-            isCloudActive = false;
-            updateSyncStatus('offline', 'Local Offline');
+            // If no user, fallback to anonymous session
+            try {
+              await signInAnonymously(fbAuth);
+            } catch (err) {
+              console.warn('Anonymous fallback auth failed:', err);
+              currentUser = null;
+              isCloudActive = false;
+              updateSyncStatus('offline', 'Local Offline');
+              updateAuthUI(null);
+            }
           }
         });
       } catch (err) {
         console.warn('Firebase init fallback to local:', err);
         isCloudActive = false;
         updateSyncStatus('offline', 'Local Cache Mode');
+        updateAuthUI(null);
       }
     }
 
     function getCollectionRef() {
       if (!fbDb || !currentUser) return null;
-      // Strict path conforming to Rule 1
       return collection(fbDb, 'artifacts', appId, 'users', currentUser.uid, 'reminders');
     }
 
-    function listenToFirestore() {
+    async function listenToFirestore() {
       if (firestoreUnsubscribe) firestoreUnsubscribe();
       const colRef = getCollectionRef();
       if (!colRef) return;
@@ -772,14 +944,35 @@
           });
         });
 
-        window.reminders = items;
-        saveLocalCache(items);
-        window.renderReminders();
-        if (window.isCalendarView) window.renderCalendar();
+        // If newly signed-in cloud account has records, adopt them;
+        // If account is empty but local cache has records, migrate local to cloud.
+        if (items.length === 0 && window.reminders.length > 0 && currentUser && !currentUser.isAnonymous) {
+          migrateLocalDataToCloud(currentUser);
+        } else {
+          window.reminders = items;
+          saveLocalCache(items);
+          window.renderReminders();
+          if (window.isCalendarView) window.renderCalendar();
+        }
       }, (err) => {
         console.error('Firestore listener error:', err);
-        updateSyncStatus('offline', 'Local (Sync Error)');
+        updateSyncStatus('offline', 'Sync Interrupted');
       });
+    }
+
+    async function migrateLocalDataToCloud(user) {
+      if (!fbDb || !user || window.reminders.length === 0) return;
+      try {
+        const batch = writeBatch(fbDb);
+        window.reminders.forEach(reminder => {
+          const docRef = doc(fbDb, 'artifacts', appId, 'users', user.uid, 'reminders', reminder.id);
+          batch.set(docRef, reminder, { merge: true });
+        });
+        await batch.commit();
+        window.showToast('Existing reminders linked to your account!', 'success');
+      } catch (e) {
+        console.warn('Migration batch error:', e);
+      }
     }
 
     async function cloudSaveReminder(reminder) {
@@ -855,7 +1048,7 @@
               reminderDate: today,
               reminderTime: '11:00',
               expiryDate: new Date(Date.now() + 20 * 86400000).toISOString().split('T')[0],
-              note: 'Application Reference: LIC-9831. Verify before submission.',
+              note: 'Application Reference: LIC-9831. Sign in to view on all phones/PCs.',
               completed: false,
               notified: false,
               createdAt: new Date().toISOString()
@@ -866,7 +1059,7 @@
               reminderDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
               reminderTime: '14:30',
               expiryDate: new Date(Date.now() + 12 * 86400000).toISOString().split('T')[0],
-              note: 'Contact account manager for renewal rate discount.',
+              note: 'Contact insurance agent for renewal invoice.',
               completed: false,
               notified: false,
               createdAt: new Date().toISOString()
@@ -878,9 +1071,76 @@
       window.renderReminders();
     }
 
+    // AUTH ACTION HANDLERS
+    async function handleGoogleSignIn() {
+      if (!fbAuth) return;
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await signInWithPopup(fbAuth, provider);
+        closeAuthModal();
+        window.showToast('Signed in successfully! Reminders synced across all devices.', 'success');
+      } catch (err) {
+        console.error('Google sign in error:', err);
+        window.showToast(err.message || 'Google Sign-In failed', 'error');
+      }
+    }
+
+    async function handleEmailAuthSubmit(e) {
+      e.preventDefault();
+      if (!fbAuth) return;
+
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+
+      try {
+        if (window.authMode === 'signup') {
+          await createUserWithEmailAndPassword(fbAuth, email, password);
+          window.showToast('Account created! Your data will now sync to any device.', 'success');
+        } else {
+          await signInWithEmailAndPassword(fbAuth, email, password);
+          window.showToast('Welcome back! Multi-device sync connected.', 'success');
+        }
+        closeAuthModal();
+      } catch (err) {
+        console.error('Email auth error:', err);
+        window.showToast(err.message || 'Authentication failed', 'error');
+      }
+    }
+
+    async function handleSignOut() {
+      if (!fbAuth) return;
+      try {
+        await signOut(fbAuth);
+        // Clean re-init with fresh anonymous state
+        await signInAnonymously(fbAuth);
+        closeAuthModal();
+        window.showToast('Signed out of cloud account', 'success');
+      } catch (err) {
+        console.error('Sign out error:', err);
+      }
+    }
+
+    function openAuthModal() {
+      const modal = document.getElementById('auth-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeAuthModal() {
+      const modal = document.getElementById('auth-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
     window.cloudSaveReminder = cloudSaveReminder;
     window.cloudDeleteReminder = cloudDeleteReminder;
     window.cloudBatchDelete = cloudBatchDelete;
+    window.handleGoogleSignIn = handleGoogleSignIn;
+    window.handleEmailAuthSubmit = handleEmailAuthSubmit;
+    window.handleSignOut = handleSignOut;
+    window.openAuthModal = openAuthModal;
+    window.closeAuthModal = closeAuthModal;
 
     initFirebase();
   </script>
@@ -909,13 +1169,6 @@
       return formatDateToYYYYMMDD(d.getFullYear(), d.getMonth() + 1, d.getDate());
     }
 
-    /**
-     * Accurate Date & Time Parser
-     * Handles Excel numeric serial dates (serial - 25569) without UTC drift
-     * Extracts embedded strings like 'EXPIRY 26/08/2024' or 'EXPIRY-13/11/2024'
-     * Recognizes DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
-     * Never defaults to today if a date is present in the file
-     */
     function robustParseExcelDate(val) {
       if (val === null || val === undefined || val === '') return '';
 
@@ -944,7 +1197,7 @@
         return formatDateToYYYYMMDD(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10), parseInt(isoMatch[3], 10));
       }
 
-      // Pattern 2: DD/MM/YYYY or DD-MM-YYYY (e.g. 'EXPIRY 26/08/2024')
+      // Pattern 2: DD/MM/YYYY or DD-MM-YYYY
       const dmy4Match = str.match(/\b(0?[1-9]|[12]\d|3[01])[-\/\.](0?[1-9]|1[0-2])[-\/\.](20\d\d|19\d\d)\b/);
       if (dmy4Match) {
         return formatDateToYYYYMMDD(parseInt(dmy4Match[3], 10), parseInt(dmy4Match[2], 10), parseInt(dmy4Match[1], 10));
@@ -1165,7 +1418,7 @@
       });
 
       document.getElementById('excel-parsed-count-msg').textContent = 
-        `Previewing 5 of ${parsedExcelData.dataRows.length} rows. Dates parsed cleanly without defaulting to today.`;
+        `Previewing 5 of ${parsedExcelData.dataRows.length} rows. Dates parsed accurately without defaulting to today.`;
     }
 
     function closeExcelModal() {
@@ -1221,7 +1474,7 @@
       }
 
       closeExcelModal();
-      showToast(`Imported & synced ${importedCount} reminders to Firebase!`, 'success');
+      showToast(`Imported & synced ${importedCount} reminders to Cloud!`, 'success');
       playDueChime();
     }
 
@@ -1580,7 +1833,7 @@
       const confirmModal = document.getElementById('confirm-modal');
       document.getElementById('confirm-title').textContent = 'Delete Multiple Reminders';
       document.getElementById('confirm-desc').textContent = 
-        `Permanently remove ${window.selectedReminderIds.size} selected reminder(s) from Firebase & device?`;
+        `Permanently remove ${window.selectedReminderIds.size} selected reminder(s) from Cloud & all devices?`;
 
       window.confirmCallback = async () => {
         const ids = Array.from(window.selectedReminderIds);
@@ -1961,7 +2214,7 @@
       checkAlarmDue();
     }
 
-    // Attach globals to window for inline onclick attributes
+    // Attach globals to window for inline HTML onclick attributes
     window.openReminderModal = openReminderModal;
     window.closeReminderModal = closeReminderModal;
     window.handleSaveReminder = handleSaveReminder;
@@ -2016,6 +2269,7 @@
           closeExcelModal();
           closeConfirmModal(false);
           closeAlarmModal();
+          if (window.closeAuthModal) window.closeAuthModal();
         }
       });
 
