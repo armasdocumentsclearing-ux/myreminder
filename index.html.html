@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Smart Remind - Cloud Reminder & Expiry Manager</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS (xlsx) for reading/writing Excel workbooks -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF & jsPDF AutoTable for PDF exports -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+    }
+    body {
+      padding-top: var(--sat);
+      padding-bottom: var(--sab);
+      padding-left: var(--sal);
+      padding-right: var(--sar);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, textarea, select {
+      user-select: text;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 9999px;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.06); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .alarm-glow {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200 antialiased overflow-x-hidden">
+
+  <!-- Main Container -->
+  <div class="flex-1 flex w-full max-w-7xl mx-auto md:p-4 lg:p-6 pb-28 md:pb-6 gap-6">
+
+    <!-- Desktop Sidebar Navigation -->
+    <aside class="hidden md:flex flex-col w-64 lg:w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm shrink-0 h-[calc(100vh-3rem)] sticky top-6">
+      
+      <!-- Brand & Project Info -->
+      <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/25 shrink-0">
+          <i data-lucide="bell-ring" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h1 class="font-bold text-lg leading-tight bg-gradient-to-r from-slate-900 to-brand-600 dark:from-white dark:to-indigo-300 bg-clip-text text-transparent truncate">RemindPulse</h1>
+          <div class="flex items-center gap-1.5 text-[11px] font-medium">
+            <span id="cloud-status-dot-side" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="cloud-status-text-side" class="text-slate-500 dark:text-slate-400 truncate">Connecting Firebase...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Add New Reminder Primary Button -->
+      <button onclick="openReminderModal()" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-700 active:scale-98 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-brand-600/25 transition duration-150 mb-4 group">
+        <i data-lucide="plus-circle" class="w-5 h-5 transition-transform group-hover:rotate-90"></i>
+        <span>New Reminder</span>
+      </button>
+
+      <!-- Date Horizon Navigation Filter Tabs -->
+      <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 px-2 mb-2">Filters & Horizons</div>
+      <nav class="space-y-1 flex-1 overflow-y-auto pr-1">
+        
+        <button onclick="switchHorizonFilter('all')" id="nav-filter-all" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="inbox" class="w-4 h-4"></i>
+            <span>All Reminders</span>
+          </div>
+          <span id="badge-side-all" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-brand-200/60 dark:bg-brand-900/60">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('today')" id="nav-filter-today" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="sun" class="w-4 h-4 text-amber-500"></i>
+            <span>Due Today</span>
+          </div>
+          <span id="badge-side-today" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('next-10')" id="nav-filter-next-10" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="calendar-range" class="w-4 h-4 text-indigo-500"></i>
+            <span>Next 10 Days</span>
+          </div>
+          <span id="badge-side-next-10" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('next-20')" id="nav-filter-next-20" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="calendar-days" class="w-4 h-4 text-cyan-500"></i>
+            <span>Next 20 Days</span>
+          </div>
+          <span id="badge-side-next-20" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('next-30')" id="nav-filter-next-30" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="calendar" class="w-4 h-4 text-emerald-500"></i>
+            <span>Next 30 Days</span>
+          </div>
+          <span id="badge-side-next-30" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('next-60')" id="nav-filter-next-60" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="clock-3" class="w-4 h-4 text-purple-500"></i>
+            <span>Next 2 Months</span>
+          </div>
+          <span id="badge-side-next-60" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('next-90')" id="nav-filter-next-90" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="clock-8" class="w-4 h-4 text-blue-500"></i>
+            <span>Next 3 Months</span>
+          </div>
+          <span id="badge-side-next-90" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('expired')" id="nav-filter-expired" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="alert-octagon" class="w-4 h-4 text-rose-500"></i>
+            <span>Expired / Overdue</span>
+          </div>
+          <span id="badge-side-expired" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">0</span>
+        </button>
+
+        <button onclick="switchHorizonFilter('completed')" id="nav-filter-completed" class="horizon-nav-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="check-check" class="w-4 h-4 text-teal-500"></i>
+            <span>Completed</span>
+          </div>
+          <span id="badge-side-completed" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800">0</span>
+        </button>
+
+        <div class="pt-2 pb-1">
+          <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 px-2">Views</div>
+        </div>
+
+        <button onclick="toggleCalendarView()" id="nav-btn-calendar" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="calendar" class="w-4 h-4 text-amber-600"></i>
+            <span id="calendar-toggle-label">Month Calendar</span>
+          </div>
+        </button>
+      </nav>
+
+      <!-- Sidebar Tools -->
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+        <label for="excel-file-input" class="w-full py-2 px-3 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition">
+          <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+          <span>Import Excel File</span>
+        </label>
+        
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="exportToExcel()" class="py-1.5 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="file-spreadsheet" class="w-3 h-3 text-emerald-600"></i>
+            <span>Excel (.xlsx)</span>
+          </button>
+          <button onclick="exportToPDF()" class="py-1.5 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="file-text" class="w-3 h-3 text-rose-600"></i>
+            <span>PDF (.pdf)</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0">
+
+      <!-- Main Header with Actions -->
+      <header class="w-full bg-white dark:bg-slate-900 md:rounded-3xl border-b md:border border-slate-200 dark:border-slate-800 p-3.5 md:p-4 mb-3.5 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          
+          <!-- Title & Live Time -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="md:hidden w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center text-white shrink-0">
+                <i data-lucide="bell" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h2 id="current-view-heading" class="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">All Reminders</h2>
+                <div class="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  <span id="current-live-date">Today</span>
+                  <span>•</span>
+                  <span id="current-live-clock" class="font-mono font-semibold text-brand-600 dark:text-indigo-400">--:--:--</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mobile Action Shortcuts -->
+            <div class="flex items-center gap-1 md:hidden">
+              <span id="cloud-status-dot-mobile" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse inline-block mr-1"></span>
+              <button onclick="openReminderModal()" class="py-1.5 px-3 bg-brand-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>New</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- PRIMARY ACTION BUTTONS TOOLBAR -->
+          <div class="flex items-center flex-wrap gap-2">
+            
+            <!-- Real-time Cloud Indicator Pill -->
+            <div id="btn-cloud-status" class="hidden sm:flex items-center gap-2 py-1.5 px-3 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+              <span id="cloud-status-dot-header" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              <span id="cloud-status-text-header">Firebase Syncing...</span>
+            </div>
+
+            <!-- Import Excel Button -->
+            <label for="excel-file-input" class="cursor-pointer py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 shadow-sm transition active:scale-95">
+              <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+              <span>Import Excel</span>
+            </label>
+
+            <!-- Export to Excel Button -->
+            <button onclick="exportToExcel()" class="py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-sm transition active:scale-95">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>Export Excel</span>
+            </button>
+
+            <!-- Export to PDF Button -->
+            <button onclick="exportToPDF()" class="py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-sm transition active:scale-95">
+              <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-600"></i>
+              <span>Export PDF</span>
+            </button>
+
+            <!-- Select Multiple / Batch Delete Toggle Button -->
+            <button onclick="toggleMultiSelectMode()" id="btn-toggle-multiselect" class="py-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-sm transition active:scale-95">
+              <i data-lucide="check-square" class="w-3.5 h-3.5 text-indigo-500"></i>
+              <span id="multiselect-label">Select Multiple</span>
+            </button>
+
+            <!-- Sound & Dark Theme Toggles -->
+            <div class="flex items-center gap-1 ml-auto lg:ml-0">
+              <button onclick="toggleSoundAlert()" id="sound-btn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Toggle audio chime alert">
+                <i data-lucide="volume-2" id="sound-icon" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+              </button>
+              <button onclick="toggleDarkMode()" class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Toggle dark theme">
+                <i data-lucide="moon" id="theme-icon" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden Excel File Input -->
+        <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelFileUpload(event)">
+      </header>
+
+      <!-- MULTI-SELECT BATCH ACTION BAR -->
+      <section id="multiselect-action-bar" class="hidden mx-3 md:mx-0 mb-3 bg-indigo-50 dark:bg-brand-950/60 border border-brand-200 dark:border-brand-800/80 rounded-2xl p-3 items-center justify-between gap-3 shadow-sm transition-all">
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-xs font-semibold text-brand-900 dark:text-brand-200 cursor-pointer">
+            <input type="checkbox" id="checkbox-select-all" onchange="handleSelectAllChange(this.checked)" class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300">
+            <span>Select All Filtered</span>
+          </label>
+          <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-brand-600 text-white" id="selected-counter-badge">0 selected</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="promptDeleteSelectedReminders()" id="btn-delete-selected" disabled class="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>Delete Selected</span>
+          </button>
+          <button onclick="toggleMultiSelectMode(false)" class="py-1.5 px-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg text-xs font-medium">Cancel</button>
+        </div>
+      </section>
+
+      <!-- HORIZONTAL HORIZON PILLS -->
+      <div class="mx-3 md:mx-0 mb-3 overflow-x-auto pb-1 scrollbar-none flex items-center gap-1.5 text-xs font-medium" id="horizon-filter-pills">
+        <button onclick="switchHorizonFilter('all')" data-horizon="all" class="h-pill px-3 py-1.5 rounded-xl font-bold bg-brand-600 text-white shrink-0 shadow-sm transition">All</button>
+        <button onclick="switchHorizonFilter('today')" data-horizon="today" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition">Today</button>
+        <button onclick="switchHorizonFilter('next-10')" data-horizon="next-10" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition">Next 10 Days</button>
+        <button onclick="switchHorizonFilter('next-20')" data-horizon="next-20" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition">Next 20 Days</button>
+        <button onclick="switchHorizonFilter('next-30')" data-horizon="next-30" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition">30 Days</button>
+        <button onclick="switchHorizonFilter('next-60')" data-horizon="next-60" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition">2 Months (60d)</button>
+        <button onclick="switchHorizonFilter('next-90')" data-horizon="next-90" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition">3 Months (90d)</button>
+        <button onclick="switchHorizonFilter('expired')" data-horizon="expired" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-rose-600 dark:text-rose-400 shrink-0 hover:bg-slate-100 transition">Expired / Overdue</button>
+        <button onclick="switchHorizonFilter('completed')" data-horizon="completed" class="h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-teal-600 dark:text-teal-400 shrink-0 hover:bg-slate-100 transition">Completed</button>
+      </div>
+
+      <!-- Search & Sort Row -->
+      <div class="px-3 md:px-0 flex items-center justify-between gap-2 mb-3">
+        <!-- Search Input -->
+        <div class="relative flex-1 max-w-md">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input type="text" id="search-input" oninput="handleSearch(this.value)" placeholder="Search subjects, notes, dates..." class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white">
+        </div>
+
+        <!-- Sort Select -->
+        <div class="relative shrink-0">
+          <select id="sort-select" onchange="handleSortChange(this.value)" class="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-slate-700 dark:text-slate-200 font-medium focus:outline-none cursor-pointer">
+            <option value="remind-asc">Reminder Date (Earliest)</option>
+            <option value="remind-desc">Reminder Date (Latest)</option>
+            <option value="expiry-asc">Expiry Date (Earliest)</option>
+            <option value="expiry-desc">Expiry Date (Latest)</option>
+            <option value="created-desc">Recently Added</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- MAIN CONTAINER: LIST VIEW VS CALENDAR VIEW -->
+      <div class="flex-1 px-3 md:px-0 flex flex-col">
+        
+        <!-- REMINDERS LIST VIEW -->
+        <div id="view-container-list" class="flex-1 flex flex-col space-y-2.5">
+          <div id="reminders-list" class="space-y-2.5"></div>
+
+          <!-- Empty State -->
+          <div id="empty-state" class="hidden flex-col items-center justify-center p-10 text-center my-auto bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center mb-3">
+              <i data-lucide="check-circle" class="w-7 h-7"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 mb-1">No Reminders Found</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-4">No tasks matching this filter horizon. You can add one manually or import your spreadsheet.</p>
+            <div class="flex items-center gap-2">
+              <button onclick="openReminderModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold shadow-md transition">New Reminder</button>
+              <label for="excel-file-input" class="px-4 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold cursor-pointer transition">Import Excel</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- MONTH CALENDAR VIEW -->
+        <div id="view-container-calendar" class="hidden flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 id="calendar-month-label" class="font-bold text-base sm:text-lg text-slate-900 dark:text-white">Month Year</h3>
+            <div class="flex items-center gap-1.5">
+              <button onclick="navigateMonth(-1)" class="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <button onclick="navigateMonth(0)" class="px-3 py-1 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Today</button>
+              <button onclick="navigateMonth(1)" class="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-7 gap-1 text-center font-semibold text-xs text-slate-400 mb-2">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+
+          <div id="calendar-days-grid" class="grid grid-cols-7 gap-1.5 flex-1 min-h-[380px]"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MOBILE BOTTOM STICKY QUICK NAVIGATION -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-around shadow-2xl">
+    <button onclick="switchHorizonFilter('all')" class="flex flex-col items-center gap-1 text-brand-600 dark:text-brand-400 p-1">
+      <i data-lucide="inbox" class="w-5 h-5"></i>
+      <span class="text-[10px] font-semibold">All</span>
+    </button>
+    <button onclick="switchHorizonFilter('today')" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+      <i data-lucide="sun" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Today</span>
+    </button>
+    <button onclick="openReminderModal()" class="w-12 h-12 -mt-5 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-brand-500/30 active:scale-95 transition">
+      <i data-lucide="plus" class="w-6 h-6"></i>
+    </button>
+    <button onclick="toggleCalendarView()" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+      <i data-lucide="calendar" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Calendar</span>
+    </button>
+    <button onclick="switchHorizonFilter('expired')" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+      <i data-lucide="alert-octagon" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Expired</span>
+    </button>
+  </nav>
+
+  <!-- CREATE / EDIT REMINDER MODAL (Strictly 5 Fields, No Category/Chime) -->
+  <div id="reminder-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl transform transition-all my-8">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="bell" class="w-5 h-5 text-brand-600"></i>
+          <span>Create Reminder</span>
+        </h3>
+        <button onclick="closeReminderModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="reminder-form" onsubmit="handleSaveReminder(event)" class="space-y-4">
+        <input type="hidden" id="reminder-id">
+
+        <!-- 1. Subject Field -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Subject *</label>
+          <input type="text" id="input-subject" required placeholder="e.g. Renew Trade License, Vehicle Insurance, Tax Audit" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- 2 & 3. Reminder Date & Time Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Reminder Date *</label>
+            <input type="date" id="input-reminder-date" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Reminder Time *</label>
+            <input type="time" id="input-reminder-time" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <!-- 4. Expiry Date Field -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+            Expiry Date
+            <span class="text-[11px] font-normal text-slate-400 dark:text-slate-500 lowercase">(optional validity/deadline)</span>
+          </label>
+          <input type="date" id="input-expiry-date" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- 5. Note Option Field -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+            Note Option
+            <span class="text-[11px] font-normal text-slate-400 dark:text-slate-500 lowercase">(policy number, remarks, contact info)</span>
+          </label>
+          <textarea id="input-note" rows="3" placeholder="Add specific notes, policy details, or guidelines..." class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"></textarea>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <button type="button" onclick="closeReminderModal()" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancel</button>
+          <button type="submit" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center gap-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Save Reminder</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EXCEL IMPORT MAPPING & DIAGNOSTIC MODAL -->
+  <div id="excel-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-3xl p-5 sm:p-6 shadow-2xl my-8">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+        <div>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="file-spreadsheet" class="w-5 h-5 text-emerald-600"></i>
+            <span>Import Excel Spreadsheet</span>
+          </h3>
+          <p id="excel-file-summary" class="text-xs text-slate-500 dark:text-slate-400">File details</p>
+        </div>
+        <button onclick="closeExcelModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Multi-Sheet Selector -->
+      <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 mb-3 text-xs">
+        <label class="font-bold text-slate-600 dark:text-slate-300 shrink-0">Sheet Selector:</label>
+        <select id="excel-sheet-select" onchange="handleSheetChange(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-1.5 font-medium"></select>
+      </div>
+
+      <!-- Column Mapping Selectors -->
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3.5 mb-3 border border-slate-200/80 dark:border-slate-800 text-xs">
+        <h4 class="font-bold uppercase tracking-wider text-slate-500 mb-2">Column Mapping (Auto-detected):</h4>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div>
+            <label class="block font-medium text-slate-600 dark:text-slate-400 mb-1">Subject Column *</label>
+            <select id="map-col-subject" onchange="refreshExcelPreviewTable()" class="w-full p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"></select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 dark:text-slate-400 mb-1">Reminder Date</label>
+            <select id="map-col-reminder-date" onchange="refreshExcelPreviewTable()" class="w-full p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"></select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 dark:text-slate-400 mb-1">Expiry Date</label>
+            <select id="map-col-expiry-date" onchange="refreshExcelPreviewTable()" class="w-full p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"></select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 dark:text-slate-400 mb-1">Note Option</label>
+            <select id="map-col-note" onchange="refreshExcelPreviewTable()" class="w-full p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Raw vs Parsed Date Diagnostic Preview Table -->
+      <div class="mb-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+        <div class="max-h-52 overflow-y-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 sticky top-0 font-semibold">
+              <tr>
+                <th class="p-2 border-b border-slate-200 dark:border-slate-700">Subject</th>
+                <th class="p-2 border-b border-slate-200 dark:border-slate-700">Raw Excel Value</th>
+                <th class="p-2 border-b border-slate-200 dark:border-slate-700">Parsed Remind Date</th>
+                <th class="p-2 border-b border-slate-200 dark:border-slate-700">Parsed Expiry Date</th>
+                <th class="p-2 border-b border-slate-200 dark:border-slate-700">Parsed Time</th>
+              </tr>
+            </thead>
+            <tbody id="excel-diagnostic-body" class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+        <span id="excel-parsed-count-msg" class="text-xs text-slate-500 font-medium">Ready to import</span>
+        <div class="flex items-center gap-2">
+          <button onclick="closeExcelModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancel</button>
+          <button onclick="confirmExcelImport()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center gap-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Confirm & Sync Data</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE RINGING ALARM MODAL -->
+  <div id="alarm-banner-modal" class="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border-2 border-brand-500 rounded-3xl w-full max-w-md p-6 shadow-2xl text-center transform transition-all">
+      <div class="w-20 h-20 mx-auto rounded-3xl bg-brand-100 dark:bg-brand-950/80 text-brand-600 dark:text-indigo-400 flex items-center justify-center mb-3 alarm-glow">
+        <i data-lucide="bell-ring" class="w-10 h-10 animate-bounce"></i>
+      </div>
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1.5">Reminder Due!</span>
+      <h3 id="alarm-title" class="text-lg font-bold text-slate-900 dark:text-white mb-1.5 leading-snug">Task Subject</h3>
+      <p id="alarm-notes" class="text-xs text-slate-500 dark:text-slate-400 mb-5 line-clamp-3">Note details</p>
+
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="snoozeActiveAlarm(5)" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+          <span>Snooze 5 Min</span>
+        </button>
+        <button onclick="completeActiveAlarm()" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs shadow-md transition flex items-center justify-center gap-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Mark Completed</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION BOX -->
+  <div id="toast-box" class="fixed top-5 right-5 z-50 transform translate-y-[-140%] opacity-0 transition-all duration-300 pointer-events-none max-w-sm w-full">
+    <div id="toast-content" class="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700/50">
+      <div id="toast-icon" class="text-emerald-400 shrink-0">
+        <i data-lucide="check-circle" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p id="toast-message" class="text-xs font-semibold leading-tight">Notification text</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM CONFIRMATION DIALOG -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-sm p-5 shadow-2xl text-center">
+      <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="trash-2" class="w-6 h-6"></i>
+      </div>
+      <h4 id="confirm-title" class="font-bold text-base text-slate-900 dark:text-white mb-1">Delete</h4>
+      <p id="confirm-desc" class="text-xs text-slate-500 dark:text-slate-400 mb-5">Are you sure?</p>
+      <div class="flex items-center justify-center gap-2">
+        <button onclick="closeConfirmModal(false)" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button id="confirm-action-btn" class="px-5 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-md">Confirm Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FIREBASE V11 INTEGRATION SCRIPT -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // User's exact Firebase Project Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBVDmedgXTDJ6Xtv0-05i27pSoR7Bie4GA",
+      authDomain: "myreminder-4dcca.firebaseapp.com",
+      projectId: "myreminder-4dcca",
+      storageBucket: "myreminder-4dcca.firebasestorage.app",
+      messagingSenderId: "197715320303",
+      appId: "1:197715320303:web:a1f4626fdf01e989982a1a"
+    };
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'myreminder-4dcca';
+
+    let fbApp = null;
+    let fbAuth = null;
+    let fbDb = null;
+    let currentUser = null;
+    let firestoreUnsubscribe = null;
+    let isCloudActive = false;
+
+    const LOCAL_CACHE_KEY = 'smartremind_myreminder_cache';
+
+    // Application state
+    window.reminders = [];
+    window.activeHorizon = 'all';
+    window.isCalendarView = false;
+    window.searchQuery = '';
+    window.sortOrder = 'remind-asc';
+    window.soundEnabled = true;
+    window.isMultiSelectMode = false;
+    window.selectedReminderIds = new Set();
+    window.currentCalendarDate = new Date();
+    window.ringingReminder = null;
+    window.pendingWorkbook = null;
+    window.pendingFileName = '';
+    window.confirmCallback = null;
+
+    // Web Audio Synthesizer
+    let audioCtx = null;
+    window.getAudioContext = function() {
+      if (!audioCtx) {
+        const AudioClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioClass) audioCtx = new AudioClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    };
+
+    window.playDueChime = function() {
+      if (!window.soundEnabled) return;
+      try {
+        const ctx = window.getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const masterGain = ctx.createGain();
+        masterGain.connect(ctx.destination);
+
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, index) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + index * 0.09);
+
+          gain.gain.setValueAtTime(0, now + index * 0.09);
+          gain.gain.linearRampToValueAtTime(0.22, now + index * 0.09 + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.09 + 1.3);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+
+          osc.start(now + index * 0.09);
+          osc.stop(now + index * 0.09 + 1.4);
+        });
+      } catch (e) {
+        console.warn('Audio play error:', e);
+      }
+    };
+
+    function updateSyncStatus(status, label) {
+      const dotClasses = {
+        connected: 'bg-emerald-500',
+        offline: 'bg-rose-500',
+        connecting: 'bg-amber-400 animate-pulse'
+      };
+
+      const dotClass = dotClasses[status] || 'bg-slate-400';
+      ['cloud-status-dot-side', 'cloud-status-dot-header', 'cloud-status-dot-mobile'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.className = `w-2 h-2 rounded-full ${dotClass}`;
+      });
+
+      const headerText = document.getElementById('cloud-status-text-header');
+      if (headerText) headerText.textContent = label;
+
+      const sideText = document.getElementById('cloud-status-text-side');
+      if (sideText) sideText.textContent = label;
+    }
+
+    async function initFirebase() {
+      updateSyncStatus('connecting', 'Connecting...');
+      loadLocalCache();
+
+      try {
+        fbApp = initializeApp(firebaseConfig);
+        fbAuth = getAuth(fbApp);
+        fbDb = getFirestore(fbApp);
+
+        // Immediate anonymous authentication
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(fbAuth, __initial_auth_token);
+        } else {
+          await signInAnonymously(fbAuth);
+        }
+
+        onAuthStateChanged(fbAuth, (user) => {
+          if (user) {
+            currentUser = user;
+            isCloudActive = true;
+            updateSyncStatus('connected', 'Cloud Synced');
+            listenToFirestore();
+          } else {
+            currentUser = null;
+            isCloudActive = false;
+            updateSyncStatus('offline', 'Local Offline');
+          }
+        });
+      } catch (err) {
+        console.warn('Firebase init fallback to local:', err);
+        isCloudActive = false;
+        updateSyncStatus('offline', 'Local Cache Mode');
+      }
+    }
+
+    function getCollectionRef() {
+      if (!fbDb || !currentUser) return null;
+      // Strict path conforming to Rule 1
+      return collection(fbDb, 'artifacts', appId, 'users', currentUser.uid, 'reminders');
+    }
+
+    function listenToFirestore() {
+      if (firestoreUnsubscribe) firestoreUnsubscribe();
+      const colRef = getCollectionRef();
+      if (!colRef) return;
+
+      firestoreUnsubscribe = onSnapshot(colRef, (snapshot) => {
+        const items = [];
+        snapshot.forEach((docSnap) => {
+          items.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          });
+        });
+
+        window.reminders = items;
+        saveLocalCache(items);
+        window.renderReminders();
+        if (window.isCalendarView) window.renderCalendar();
+      }, (err) => {
+        console.error('Firestore listener error:', err);
+        updateSyncStatus('offline', 'Local (Sync Error)');
+      });
+    }
+
+    async function cloudSaveReminder(reminder) {
+      if (isCloudActive && currentUser && fbDb) {
+        try {
+          const docRef = doc(fbDb, 'artifacts', appId, 'users', currentUser.uid, 'reminders', reminder.id);
+          await setDoc(docRef, reminder, { merge: true });
+          return;
+        } catch (e) {
+          console.warn('Direct cloud save error, updating local cache:', e);
+        }
+      }
+      // Local cache update
+      const idx = window.reminders.findIndex(r => r.id === reminder.id);
+      if (idx !== -1) {
+        window.reminders[idx] = reminder;
+      } else {
+        window.reminders.unshift(reminder);
+      }
+      saveLocalCache(window.reminders);
+      window.renderReminders();
+    }
+
+    async function cloudDeleteReminder(id) {
+      if (isCloudActive && currentUser && fbDb) {
+        try {
+          const docRef = doc(fbDb, 'artifacts', appId, 'users', currentUser.uid, 'reminders', id);
+          await deleteDoc(docRef);
+          return;
+        } catch (e) {
+          console.warn('Direct cloud delete error:', e);
+        }
+      }
+      window.reminders = window.reminders.filter(r => r.id !== id);
+      saveLocalCache(window.reminders);
+      window.renderReminders();
+    }
+
+    async function cloudBatchDelete(ids) {
+      if (isCloudActive && currentUser && fbDb) {
+        try {
+          for (const id of ids) {
+            const docRef = doc(fbDb, 'artifacts', appId, 'users', currentUser.uid, 'reminders', id);
+            await deleteDoc(docRef);
+          }
+          return;
+        } catch (e) {
+          console.warn('Batch delete error:', e);
+        }
+      }
+      window.reminders = window.reminders.filter(r => !ids.includes(r.id));
+      saveLocalCache(window.reminders);
+      window.renderReminders();
+    }
+
+    function saveLocalCache(items) {
+      try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(items));
+      } catch (e) {}
+    }
+
+    function loadLocalCache() {
+      try {
+        const saved = localStorage.getItem(LOCAL_CACHE_KEY);
+        if (saved) {
+          window.reminders = JSON.parse(saved);
+        } else {
+          const today = window.getTodayYYYYMMDD();
+          window.reminders = [
+            {
+              id: 'rem-demo-1',
+              subject: 'Renew Trade License & Municipality Permit',
+              reminderDate: today,
+              reminderTime: '11:00',
+              expiryDate: new Date(Date.now() + 20 * 86400000).toISOString().split('T')[0],
+              note: 'Application Reference: LIC-9831. Verify before submission.',
+              completed: false,
+              notified: false,
+              createdAt: new Date().toISOString()
+            },
+            {
+              id: 'rem-demo-2',
+              subject: 'Corporate Vehicle Fleet Insurance Policy',
+              reminderDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+              reminderTime: '14:30',
+              expiryDate: new Date(Date.now() + 12 * 86400000).toISOString().split('T')[0],
+              note: 'Contact account manager for renewal rate discount.',
+              completed: false,
+              notified: false,
+              createdAt: new Date().toISOString()
+            }
+          ];
+          saveLocalCache(window.reminders);
+        }
+      } catch (e) {}
+      window.renderReminders();
+    }
+
+    window.cloudSaveReminder = cloudSaveReminder;
+    window.cloudDeleteReminder = cloudDeleteReminder;
+    window.cloudBatchDelete = cloudBatchDelete;
+
+    initFirebase();
+  </script>
+
+  <!-- BUSINESS LOGIC, EXCEL PARSER, AND UI SCRIPT -->
+  <script>
+    function formatDateToYYYYMMDD(year, month, day) {
+      const y = String(year);
+      const m = String(month).padStart(2, '0');
+      const d = String(day).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatTime12Hour(time24) {
+      if (!time24) return '09:00 AM';
+      const parts = time24.split(':');
+      let h = parseInt(parts[0], 10);
+      const m = parts[1] || '00';
+      const suffix = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return `${h}:${m} ${suffix}`;
+    }
+
+    function getTodayYYYYMMDD() {
+      const d = new Date();
+      return formatDateToYYYYMMDD(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    }
+
+    /**
+     * Accurate Date & Time Parser
+     * Handles Excel numeric serial dates (serial - 25569) without UTC drift
+     * Extracts embedded strings like 'EXPIRY 26/08/2024' or 'EXPIRY-13/11/2024'
+     * Recognizes DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+     * Never defaults to today if a date is present in the file
+     */
+    function robustParseExcelDate(val) {
+      if (val === null || val === undefined || val === '') return '';
+
+      if (val instanceof Date) {
+        if (!isNaN(val.getTime())) {
+          return formatDateToYYYYMMDD(val.getFullYear(), val.getMonth() + 1, val.getDate());
+        }
+        return '';
+      }
+
+      if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)) && String(val).trim().length >= 4 && !String(val).includes('-') && !String(val).includes('/'))) {
+        const num = parseFloat(val);
+        if (num > 20000 && num < 100000) {
+          const utcMillis = (num - 25569) * 86400 * 1000;
+          const excelDate = new Date(utcMillis);
+          return formatDateToYYYYMMDD(excelDate.getUTCFullYear(), excelDate.getUTCMonth() + 1, excelDate.getUTCDate());
+        }
+      }
+
+      let str = String(val).trim();
+      if (!str) return '';
+
+      // Pattern 1: ISO YYYY-MM-DD
+      const isoMatch = str.match(/\b(20\d\d|19\d\d)[-\/\.](0?[1-9]|1[0-2])[-\/\.](0?[1-9]|[12]\d|3[01])\b/);
+      if (isoMatch) {
+        return formatDateToYYYYMMDD(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10), parseInt(isoMatch[3], 10));
+      }
+
+      // Pattern 2: DD/MM/YYYY or DD-MM-YYYY (e.g. 'EXPIRY 26/08/2024')
+      const dmy4Match = str.match(/\b(0?[1-9]|[12]\d|3[01])[-\/\.](0?[1-9]|1[0-2])[-\/\.](20\d\d|19\d\d)\b/);
+      if (dmy4Match) {
+        return formatDateToYYYYMMDD(parseInt(dmy4Match[3], 10), parseInt(dmy4Match[2], 10), parseInt(dmy4Match[1], 10));
+      }
+
+      // Pattern 3: DD/MM/YY
+      const dmy2Match = str.match(/\b(0?[1-9]|[12]\d|3[01])[-\/\.](0?[1-9]|1[0-2])[-\/\.](\d{2})\b/);
+      if (dmy2Match) {
+        let yr = parseInt(dmy2Match[3], 10);
+        yr = yr < 70 ? 2000 + yr : 1900 + yr;
+        return formatDateToYYYYMMDD(yr, parseInt(dmy2Match[2], 10), parseInt(dmy2Match[1], 10));
+      }
+
+      const fallbackDate = new Date(str);
+      if (!isNaN(fallbackDate.getTime()) && fallbackDate.getFullYear() > 1990) {
+        return formatDateToYYYYMMDD(fallbackDate.getFullYear(), fallbackDate.getMonth() + 1, fallbackDate.getDate());
+      }
+
+      return '';
+    }
+
+    function robustParseExcelTime(val) {
+      if (val === null || val === undefined || val === '') return '09:00';
+      if (typeof val === 'number' && val >= 0 && val < 1) {
+        const totalMinutes = Math.round(val * 1440);
+        const h = Math.floor(totalMinutes / 60) % 24;
+        const m = totalMinutes % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+
+      const str = String(val).trim();
+      const intervalMatch = str.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/);
+      const timeCandidate = intervalMatch ? intervalMatch[1] : str;
+
+      const ampmMatch = timeCandidate.match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM|am|pm))?/i);
+      if (ampmMatch) {
+        let h = parseInt(ampmMatch[1], 10);
+        const m = ampmMatch[2];
+        const ampm = ampmMatch[3] ? ampmMatch[3].toUpperCase() : null;
+
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return `${String(h).padStart(2, '0')}:${m}`;
+      }
+
+      return '09:00';
+    }
+
+    let parsedExcelData = [];
+
+    function handleExcelFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      window.pendingFileName = file.name;
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          window.pendingWorkbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: true });
+
+          if (!window.pendingWorkbook.SheetNames || window.pendingWorkbook.SheetNames.length === 0) {
+            showToast('Excel workbook has no readable sheets', 'error');
+            return;
+          }
+
+          populateExcelSheetSelector();
+        } catch (err) {
+          console.error(err);
+          showToast('Failed to parse Excel file', 'error');
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+      event.target.value = '';
+    }
+
+    function populateExcelSheetSelector() {
+      const sheetSelect = document.getElementById('excel-sheet-select');
+      sheetSelect.innerHTML = '';
+
+      if (window.pendingWorkbook.SheetNames.length > 1) {
+        const allOpt = document.createElement('option');
+        allOpt.value = '__ALL__';
+        allOpt.textContent = `All Sheets Combined (${window.pendingWorkbook.SheetNames.length} tables)`;
+        sheetSelect.appendChild(allOpt);
+      }
+
+      window.pendingWorkbook.SheetNames.forEach(sheet => {
+        const opt = document.createElement('option');
+        opt.value = sheet;
+        opt.textContent = sheet;
+        sheetSelect.appendChild(opt);
+      });
+
+      handleSheetChange(sheetSelect.value);
+    }
+
+    function handleSheetChange(selectedSheet) {
+      if (!window.pendingWorkbook) return;
+
+      let combinedRows = [];
+
+      if (selectedSheet === '__ALL__') {
+        window.pendingWorkbook.SheetNames.forEach(name => {
+          const ws = window.pendingWorkbook.Sheets[name];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+          if (rows && rows.length > 1) {
+            if (combinedRows.length === 0) {
+              combinedRows.push(rows[0]);
+            }
+            combinedRows.push(...rows.slice(1));
+          }
+        });
+      } else {
+        const ws = window.pendingWorkbook.Sheets[selectedSheet];
+        combinedRows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      }
+
+      if (!combinedRows || combinedRows.length < 2) {
+        showToast('Selected sheet has no data rows', 'error');
+        return;
+      }
+
+      const headers = combinedRows[0].map(h => String(h || '').trim());
+      const dataRows = combinedRows.slice(1).filter(r => r && r.some(c => String(c).trim() !== ''));
+
+      parsedExcelData = {
+        headers,
+        dataRows,
+        fileName: window.pendingFileName
+      };
+
+      document.getElementById('excel-file-summary').textContent = `File: ${window.pendingFileName} • ${dataRows.length} data rows found`;
+
+      const subSel = document.getElementById('map-col-subject');
+      const remDateSel = document.getElementById('map-col-reminder-date');
+      const expDateSel = document.getElementById('map-col-expiry-date');
+      const noteSel = document.getElementById('map-col-note');
+
+      [subSel, remDateSel, expDateSel, noteSel].forEach(s => s.innerHTML = '');
+
+      const makeNoneOpt = () => {
+        const opt = document.createElement('option');
+        opt.value = '-1';
+        opt.textContent = '-- None / Not in file --';
+        return opt;
+      };
+      remDateSel.appendChild(makeNoneOpt());
+      expDateSel.appendChild(makeNoneOpt());
+      noteSel.appendChild(makeNoneOpt());
+
+      headers.forEach((h, idx) => {
+        subSel.appendChild(new Option(h, idx));
+        remDateSel.appendChild(new Option(h, idx));
+        expDateSel.appendChild(new Option(h, idx));
+        noteSel.appendChild(new Option(h, idx));
+
+        const lower = h.toLowerCase();
+        if (lower.includes('subject') || lower.includes('task') || lower.includes('title') || lower.includes('particular') || lower.includes('name')) {
+          subSel.value = idx;
+        }
+        if (lower.includes('remind') || lower.includes('alert') || lower.includes('start date') || lower.includes('due date')) {
+          remDateSel.value = idx;
+        }
+        if (lower.includes('expiry') || lower.includes('expire') || lower.includes('validity') || lower.includes('deadline') || lower.includes('end date')) {
+          expDateSel.value = idx;
+        }
+        if (lower.includes('note') || lower.includes('remark') || lower.includes('comment') || lower.includes('status')) {
+          noteSel.value = idx;
+        }
+      });
+
+      if (remDateSel.value === '-1' && headers.length > 1) {
+        const dateGuess = headers.findIndex(h => h.toLowerCase().includes('date'));
+        if (dateGuess !== -1) remDateSel.value = dateGuess;
+      }
+
+      refreshExcelPreviewTable();
+
+      document.getElementById('excel-modal').classList.remove('hidden');
+      document.getElementById('excel-modal').classList.add('flex');
+    }
+
+    function refreshExcelPreviewTable() {
+      if (!parsedExcelData || !parsedExcelData.dataRows) return;
+
+      const subIdx = parseInt(document.getElementById('map-col-subject').value, 10);
+      const remDateIdx = parseInt(document.getElementById('map-col-reminder-date').value, 10);
+      const expDateIdx = parseInt(document.getElementById('map-col-expiry-date').value, 10);
+
+      const tbody = document.getElementById('excel-diagnostic-body');
+      tbody.innerHTML = '';
+
+      const previewRows = parsedExcelData.dataRows.slice(0, 5);
+
+      previewRows.forEach(row => {
+        const rawSubject = row[subIdx] || '(Untitled Task)';
+        const rawDateVal = remDateIdx !== -1 ? row[remDateIdx] : (expDateIdx !== -1 ? row[expDateIdx] : '');
+        const parsedRemDate = remDateIdx !== -1 ? robustParseExcelDate(row[remDateIdx]) : '';
+        const parsedExpDate = expDateIdx !== -1 ? robustParseExcelDate(row[expDateIdx]) : '';
+        const parsedTime = robustParseExcelTime(rawDateVal);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="p-2 font-medium truncate max-w-[140px]">${escapeHtml(String(rawSubject))}</td>
+          <td class="p-2 text-slate-400 font-mono text-[11px] truncate max-w-[120px]">${escapeHtml(String(rawDateVal || '-'))}</td>
+          <td class="p-2 ${parsedRemDate ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-slate-400'}">
+            ${parsedRemDate || '<span class="text-rose-500 font-normal">None</span>'}
+          </td>
+          <td class="p-2 ${parsedExpDate ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-400'}">
+            ${parsedExpDate || '-'}
+          </td>
+          <td class="p-2 text-slate-500 font-mono">${parsedTime}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('excel-parsed-count-msg').textContent = 
+        `Previewing 5 of ${parsedExcelData.dataRows.length} rows. Dates parsed cleanly without defaulting to today.`;
+    }
+
+    function closeExcelModal() {
+      document.getElementById('excel-modal').classList.add('hidden');
+      document.getElementById('excel-modal').classList.remove('flex');
+    }
+
+    async function confirmExcelImport() {
+      if (!parsedExcelData || !parsedExcelData.dataRows) return;
+
+      const subIdx = parseInt(document.getElementById('map-col-subject').value, 10);
+      const remDateIdx = parseInt(document.getElementById('map-col-reminder-date').value, 10);
+      const expDateIdx = parseInt(document.getElementById('map-col-expiry-date').value, 10);
+      const noteIdx = parseInt(document.getElementById('map-col-note').value, 10);
+
+      let importedCount = 0;
+      const todayString = getTodayYYYYMMDD();
+
+      for (let i = 0; i < parsedExcelData.dataRows.length; i++) {
+        const row = parsedExcelData.dataRows[i];
+        const subject = String(row[subIdx] || '').trim();
+        if (!subject) continue;
+
+        let reminderDate = remDateIdx !== -1 ? robustParseExcelDate(row[remDateIdx]) : '';
+        let expiryDate = expDateIdx !== -1 ? robustParseExcelDate(row[expDateIdx]) : '';
+
+        if (!reminderDate && expiryDate) {
+          reminderDate = expiryDate;
+        } else if (!reminderDate && !expiryDate) {
+          reminderDate = todayString;
+        }
+
+        const rawTimeSource = remDateIdx !== -1 ? row[remDateIdx] : (expDateIdx !== -1 ? row[expDateIdx] : '');
+        const reminderTime = robustParseExcelTime(rawTimeSource);
+        const note = noteIdx !== -1 ? String(row[noteIdx] || '').trim() : '';
+
+        const newReminder = {
+          id: 'rem-' + Date.now() + '-' + i,
+          subject: subject,
+          reminderDate: reminderDate,
+          reminderTime: reminderTime,
+          expiryDate: expiryDate,
+          note: note,
+          completed: false,
+          notified: false,
+          createdAt: new Date().toISOString()
+        };
+
+        if (window.cloudSaveReminder) {
+          await window.cloudSaveReminder(newReminder);
+        }
+        importedCount++;
+      }
+
+      closeExcelModal();
+      showToast(`Imported & synced ${importedCount} reminders to Firebase!`, 'success');
+      playDueChime();
+    }
+
+    function exportToExcel() {
+      if (window.reminders.length === 0) {
+        showToast('No reminders available to export', 'error');
+        return;
+      }
+      try {
+        const rows = window.reminders.map(r => ({
+          'Subject': r.subject,
+          'Reminder Date': r.reminderDate,
+          'Reminder Time': formatTime12Hour(r.reminderTime),
+          'Expiry Date': r.expiryDate || '-',
+          'Status': r.completed ? 'Completed' : (isExpired(r) ? 'Expired' : 'Active'),
+          'Note Option': r.note || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Reminders');
+        XLSX.writeFile(wb, `SmartReminders_${getTodayYYYYMMDD()}.xlsx`);
+        showToast('Excel spreadsheet downloaded!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to export Excel', 'error');
+      }
+    }
+
+    function exportToPDF() {
+      if (window.reminders.length === 0) {
+        showToast('No reminders available to export', 'error');
+        return;
+      }
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+        doc.setFontSize(18);
+        doc.setTextColor(79, 70, 229);
+        doc.text('SmartRemind - Task & Expiry Report', 40, 40);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated: ${new Date().toLocaleString()}  •  Total Records: ${window.reminders.length}`, 40, 58);
+
+        const tableData = window.reminders.map(r => [
+          r.subject,
+          r.reminderDate,
+          formatTime12Hour(r.reminderTime),
+          r.expiryDate || '-',
+          r.completed ? 'Completed' : (isExpired(r) ? 'EXPIRED' : 'Active'),
+          r.note || '-'
+        ]);
+
+        doc.autoTable({
+          head: [['Subject', 'Reminder Date', 'Time', 'Expiry Date', 'Status', 'Notes']],
+          body: tableData,
+          startY: 75,
+          theme: 'grid',
+          headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          styles: { fontSize: 9, cellPadding: 5 },
+          columnStyles: {
+            0: { cellWidth: 180 },
+            4: { fontStyle: 'bold' },
+            5: { cellWidth: 200 }
+          }
+        });
+
+        doc.save(`Reminders_Report_${getTodayYYYYMMDD()}.pdf`);
+        showToast('PDF summary report downloaded!', 'success');
+      } catch (err) {
+        console.error('PDF error:', err);
+        showToast('Failed to export PDF file', 'error');
+      }
+    }
+
+    function isExpired(r) {
+      if (r.completed) return false;
+      const dateToCheck = r.expiryDate || r.reminderDate;
+      if (!dateToCheck) return false;
+      const today = getTodayYYYYMMDD();
+      return dateToCheck < today;
+    }
+
+    function isDueToday(r) {
+      const today = getTodayYYYYMMDD();
+      return r.reminderDate === today || r.expiryDate === today;
+    }
+
+    function isWithinDays(r, days) {
+      if (r.completed) return false;
+      const dateStr = r.expiryDate || r.reminderDate;
+      if (!dateStr) return false;
+
+      const target = new Date(dateStr + 'T00:00:00');
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const diffTime = target.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= days;
+    }
+
+    function switchHorizonFilter(horizon) {
+      window.activeHorizon = horizon;
+      if (window.isCalendarView) {
+        toggleCalendarView();
+      }
+
+      document.querySelectorAll('.horizon-nav-btn').forEach(b => {
+        b.classList.remove('bg-brand-50', 'text-brand-700', 'dark:bg-brand-950/60', 'dark:text-brand-300');
+        b.classList.add('text-slate-600', 'dark:text-slate-400');
+      });
+      const activeSideBtn = document.getElementById(`nav-filter-${horizon}`);
+      if (activeSideBtn) {
+        activeSideBtn.classList.add('bg-brand-50', 'text-brand-700', 'dark:bg-brand-950/60', 'dark:text-brand-300');
+        activeSideBtn.classList.remove('text-slate-600', 'dark:text-slate-400');
+      }
+
+      document.querySelectorAll('.h-pill').forEach(pill => {
+        if (pill.dataset.horizon === horizon) {
+          pill.className = 'h-pill px-3 py-1.5 rounded-xl font-bold bg-brand-600 text-white shrink-0 shadow-sm transition';
+        } else {
+          pill.className = 'h-pill px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0 hover:bg-slate-100 transition';
+        }
+      });
+
+      const titles = {
+        'all': 'All Reminders',
+        'today': 'Due Today',
+        'next-10': 'Upcoming - Next 10 Days',
+        'next-20': 'Upcoming - Next 20 Days',
+        'next-30': 'Upcoming - Next 30 Days',
+        'next-60': 'Upcoming - Next 2 Months',
+        'next-90': 'Upcoming - Next 3 Months',
+        'expired': 'Expired / Overdue Alerts',
+        'completed': 'Completed Tasks'
+      };
+      document.getElementById('current-view-heading').textContent = titles[horizon] || 'Reminders';
+
+      renderReminders();
+    }
+
+    function toggleCalendarView() {
+      window.isCalendarView = !window.isCalendarView;
+      const listContainer = document.getElementById('view-container-list');
+      const calContainer = document.getElementById('view-container-calendar');
+      const label = document.getElementById('calendar-toggle-label');
+
+      if (window.isCalendarView) {
+        listContainer.classList.add('hidden');
+        calContainer.classList.remove('hidden');
+        label.textContent = 'List View';
+        renderCalendar();
+      } else {
+        listContainer.classList.remove('hidden');
+        calContainer.classList.add('hidden');
+        label.textContent = 'Month Calendar';
+        renderReminders();
+      }
+    }
+
+    function renderReminders() {
+      const list = document.getElementById('reminders-list');
+      const emptyState = document.getElementById('empty-state');
+      if (!list) return;
+      list.innerHTML = '';
+
+      let filtered = window.reminders.filter(r => {
+        if (window.activeHorizon === 'today' && !isDueToday(r)) return false;
+        if (window.activeHorizon === 'next-10' && !isWithinDays(r, 10)) return false;
+        if (window.activeHorizon === 'next-20' && !isWithinDays(r, 20)) return false;
+        if (window.activeHorizon === 'next-30' && !isWithinDays(r, 30)) return false;
+        if (window.activeHorizon === 'next-60' && !isWithinDays(r, 60)) return false;
+        if (window.activeHorizon === 'next-90' && !isWithinDays(r, 90)) return false;
+        if (window.activeHorizon === 'expired' && !isExpired(r)) return false;
+        if (window.activeHorizon === 'completed' && !r.completed) return false;
+
+        if (window.searchQuery) {
+          const matchSub = (r.subject || '').toLowerCase().includes(window.searchQuery);
+          const matchNote = (r.note || '').toLowerCase().includes(window.searchQuery);
+          const matchDate = (r.reminderDate || '').includes(window.searchQuery) || (r.expiryDate || '').includes(window.searchQuery);
+          if (!matchSub && !matchNote && !matchDate) return false;
+        }
+        return true;
+      });
+
+      filtered.sort((a, b) => {
+        if (window.sortOrder === 'remind-asc') return (a.reminderDate + a.reminderTime).localeCompare(b.reminderDate + b.reminderTime);
+        if (window.sortOrder === 'remind-desc') return (b.reminderDate + b.reminderTime).localeCompare(a.reminderDate + a.reminderTime);
+        if (window.sortOrder === 'expiry-asc') return (a.expiryDate || '9999').localeCompare(b.expiryDate || '9999');
+        if (window.sortOrder === 'expiry-desc') return (b.expiryDate || '').localeCompare(a.expiryDate || '');
+        if (window.sortOrder === 'created-desc') return (b.createdAt || '').localeCompare(a.createdAt || '');
+        return 0;
+      });
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+      } else {
+        emptyState.classList.add('hidden');
+        emptyState.classList.remove('flex');
+
+        filtered.forEach(r => {
+          list.appendChild(createReminderCard(r));
+        });
+      }
+
+      updateAllBadges();
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function createReminderCard(reminder) {
+      const expired = isExpired(reminder);
+      const isSelected = window.selectedReminderIds.has(reminder.id);
+
+      const div = document.createElement('div');
+      div.className = `group bg-white dark:bg-slate-900 border rounded-2xl p-3.5 sm:p-4 shadow-sm transition-all duration-200 flex items-start gap-3 sm:gap-4 ${
+        reminder.completed 
+          ? 'opacity-60 border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40' 
+          : expired 
+            ? 'border-rose-300 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10' 
+            : isSelected 
+              ? 'border-brand-500 bg-brand-50/30 dark:bg-brand-950/30' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-brand-500/40'
+      }`;
+
+      div.innerHTML = `
+        <!-- Multi-select checkbox OR complete checkmark -->
+        ${window.isMultiSelectMode ? `
+          <input type="checkbox" onchange="toggleSelectReminder('${reminder.id}', this.checked)" ${isSelected ? 'checked' : ''} class="mt-1 w-5 h-5 rounded text-brand-600 focus:ring-brand-500 border-slate-300 cursor-pointer">
+        ` : `
+          <button onclick="toggleReminderComplete('${reminder.id}')" class="mt-0.5 w-6 h-6 rounded-xl border flex items-center justify-center shrink-0 transition-transform active:scale-90 ${
+            reminder.completed 
+              ? 'bg-emerald-500 border-emerald-500 text-white' 
+              : 'border-slate-300 dark:border-slate-700 hover:border-brand-600 bg-white dark:bg-slate-800 text-transparent'
+          }">
+            <i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>
+          </button>
+        `}
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <h4 class="font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-snug break-words ${reminder.completed ? 'line-through text-slate-400' : ''}">
+              ${escapeHtml(reminder.subject)}
+            </h4>
+
+            ${expired ? `
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                EXPIRED
+              </span>
+            ` : ''}
+
+            ${reminder.expiryDate ? `
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 flex items-center gap-1">
+                <i data-lucide="shield-alert" class="w-2.5 h-2.5"></i>
+                Expiry: ${reminder.expiryDate}
+              </span>
+            ` : ''}
+          </div>
+
+          <!-- Note Option -->
+          ${reminder.note ? `
+            <p class="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-100 dark:border-slate-800 my-1.5 whitespace-pre-wrap">${escapeHtml(reminder.note)}</p>
+          ` : ''}
+
+          <!-- Reminder Date & Time Meta -->
+          <div class="flex items-center gap-3 text-xs flex-wrap font-medium text-slate-500 dark:text-slate-400 mt-1">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-brand-600"></i>
+              <span>Remind: <strong class="text-slate-800 dark:text-slate-200">${reminder.reminderDate}</strong> at ${formatTime12Hour(reminder.reminderTime)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-1 shrink-0 self-center">
+          <button onclick="editReminder('${reminder.id}')" class="p-1.5 rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-800 transition" title="Edit reminder">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
+          </button>
+          <button onclick="promptDeleteSingleReminder('${reminder.id}')" class="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition" title="Delete reminder">
+            <i data-lucide="trash" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `;
+
+      return div;
+    }
+
+    function toggleMultiSelectMode(forcedState) {
+      window.isMultiSelectMode = typeof forcedState === 'boolean' ? forcedState : !window.isMultiSelectMode;
+      const bar = document.getElementById('multiselect-action-bar');
+      const label = document.getElementById('multiselect-label');
+
+      if (window.isMultiSelectMode) {
+        bar.classList.remove('hidden');
+        bar.classList.add('flex');
+        label.textContent = 'Cancel Selection';
+      } else {
+        bar.classList.add('hidden');
+        bar.classList.remove('flex');
+        label.textContent = 'Select Multiple';
+        window.selectedReminderIds.clear();
+      }
+
+      updateSelectedCountBadge();
+      renderReminders();
+    }
+
+    function toggleSelectReminder(id, isChecked) {
+      if (isChecked) {
+        window.selectedReminderIds.add(id);
+      } else {
+        window.selectedReminderIds.delete(id);
+      }
+      updateSelectedCountBadge();
+    }
+
+    function handleSelectAllChange(checked) {
+      const visible = getCurrentlyFilteredReminders();
+      if (checked) {
+        visible.forEach(r => window.selectedReminderIds.add(r.id));
+      } else {
+        window.selectedReminderIds.clear();
+      }
+      updateSelectedCountBadge();
+      renderReminders();
+    }
+
+    function getCurrentlyFilteredReminders() {
+      return window.reminders.filter(r => {
+        if (window.activeHorizon === 'today' && !isDueToday(r)) return false;
+        if (window.activeHorizon === 'next-10' && !isWithinDays(r, 10)) return false;
+        if (window.activeHorizon === 'next-20' && !isWithinDays(r, 20)) return false;
+        if (window.activeHorizon === 'next-30' && !isWithinDays(r, 30)) return false;
+        if (window.activeHorizon === 'next-60' && !isWithinDays(r, 60)) return false;
+        if (window.activeHorizon === 'next-90' && !isWithinDays(r, 90)) return false;
+        if (window.activeHorizon === 'expired' && !isExpired(r)) return false;
+        if (window.activeHorizon === 'completed' && !r.completed) return false;
+        return true;
+      });
+    }
+
+    function updateSelectedCountBadge() {
+      const count = window.selectedReminderIds.size;
+      document.getElementById('selected-counter-badge').textContent = `${count} selected`;
+      const btn = document.getElementById('btn-delete-selected');
+      if (btn) btn.disabled = count === 0;
+    }
+
+    function promptDeleteSelectedReminders() {
+      if (window.selectedReminderIds.size === 0) return;
+
+      const confirmModal = document.getElementById('confirm-modal');
+      document.getElementById('confirm-title').textContent = 'Delete Multiple Reminders';
+      document.getElementById('confirm-desc').textContent = 
+        `Permanently remove ${window.selectedReminderIds.size} selected reminder(s) from Firebase & device?`;
+
+      window.confirmCallback = async () => {
+        const ids = Array.from(window.selectedReminderIds);
+        if (window.cloudBatchDelete) {
+          await window.cloudBatchDelete(ids);
+        }
+        window.selectedReminderIds.clear();
+        toggleMultiSelectMode(false);
+        showToast('Selected reminders removed', 'success');
+      };
+
+      confirmModal.classList.remove('hidden');
+      confirmModal.classList.add('flex');
+    }
+
+    function promptDeleteSingleReminder(id) {
+      const r = window.reminders.find(item => item.id === id);
+      if (!r) return;
+
+      const confirmModal = document.getElementById('confirm-modal');
+      document.getElementById('confirm-title').textContent = 'Delete Reminder';
+      document.getElementById('confirm-desc').textContent = `Are you sure you want to delete "${r.subject}"?`;
+
+      window.confirmCallback = async () => {
+        if (window.cloudDeleteReminder) {
+          await window.cloudDeleteReminder(id);
+        }
+        showToast('Reminder deleted', 'success');
+      };
+
+      confirmModal.classList.remove('hidden');
+      confirmModal.classList.add('flex');
+    }
+
+    function closeConfirmModal(proceed) {
+      document.getElementById('confirm-modal').classList.add('hidden');
+      document.getElementById('confirm-modal').classList.remove('flex');
+      if (proceed && window.confirmCallback) window.confirmCallback();
+      window.confirmCallback = null;
+    }
+
+    document.getElementById('confirm-action-btn').addEventListener('click', () => {
+      closeConfirmModal(true);
+    });
+
+    function openReminderModal(editObj = null) {
+      const form = document.getElementById('reminder-form');
+      form.reset();
+
+      if (editObj) {
+        document.getElementById('modal-title').innerHTML = `
+          <i data-lucide="edit-3" class="w-5 h-5 text-brand-600"></i>
+          <span>Edit Reminder</span>
+        `;
+        document.getElementById('reminder-id').value = editObj.id;
+        document.getElementById('input-subject').value = editObj.subject || '';
+        document.getElementById('input-reminder-date').value = editObj.reminderDate || '';
+        document.getElementById('input-reminder-time').value = editObj.reminderTime || '09:00';
+        document.getElementById('input-expiry-date').value = editObj.expiryDate || '';
+        document.getElementById('input-note').value = editObj.note || '';
+      } else {
+        document.getElementById('modal-title').innerHTML = `
+          <i data-lucide="bell" class="w-5 h-5 text-brand-600"></i>
+          <span>Create Reminder</span>
+        `;
+        document.getElementById('reminder-id').value = '';
+        const now = new Date();
+        document.getElementById('input-reminder-date').value = getTodayYYYYMMDD();
+        const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
+        document.getElementById('input-reminder-time').value = `${String(nextHour.getHours()).padStart(2, '0')}:00`;
+      }
+
+      document.getElementById('reminder-modal').classList.remove('hidden');
+      document.getElementById('reminder-modal').classList.add('flex');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeReminderModal() {
+      document.getElementById('reminder-modal').classList.add('hidden');
+      document.getElementById('reminder-modal').classList.remove('flex');
+    }
+
+    async function handleSaveReminder(event) {
+      event.preventDefault();
+      const id = document.getElementById('reminder-id').value;
+      const subject = document.getElementById('input-subject').value.trim();
+      const reminderDate = document.getElementById('input-reminder-date').value;
+      const reminderTime = document.getElementById('input-reminder-time').value;
+      const expiryDate = document.getElementById('input-expiry-date').value;
+      const note = document.getElementById('input-note').value.trim();
+
+      if (!subject || !reminderDate || !reminderTime) {
+        showToast('Please fill in Subject, Reminder Date, and Reminder Time', 'error');
+        return;
+      }
+
+      const reminderPayload = {
+        id: id || ('rem-' + Date.now()),
+        subject, 
+        reminderDate, 
+        reminderTime, 
+        expiryDate, 
+        note,
+        completed: false,
+        notified: false,
+        createdAt: new Date().toISOString()
+      };
+
+      if (window.cloudSaveReminder) {
+        await window.cloudSaveReminder(reminderPayload);
+      }
+
+      closeReminderModal();
+      showToast(id ? 'Reminder updated & synced' : 'Reminder scheduled & synced!', 'success');
+      playDueChime();
+    }
+
+    function editReminder(id) {
+      const r = window.reminders.find(item => item.id === id);
+      if (r) openReminderModal(r);
+    }
+
+    async function toggleReminderComplete(id) {
+      const r = window.reminders.find(item => item.id === id);
+      if (r) {
+        r.completed = !r.completed;
+        if (r.completed) playDueChime();
+        if (window.cloudSaveReminder) {
+          await window.cloudSaveReminder(r);
+        }
+      }
+    }
+
+    function checkAlarmDue() {
+      const now = new Date();
+      const currentIsoDate = formatDateToYYYYMMDD(now.getFullYear(), now.getMonth() + 1, now.getDate());
+      const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      window.reminders.forEach(r => {
+        if (!r.completed && !r.notified && r.reminderDate === currentIsoDate && r.reminderTime === currentTimeStr) {
+          triggerAlarm(r);
+        }
+      });
+    }
+
+    function triggerAlarm(reminder) {
+      reminder.notified = true;
+      if (window.cloudSaveReminder) {
+        window.cloudSaveReminder(reminder);
+      }
+      window.ringingReminder = reminder;
+      playDueChime();
+
+      document.getElementById('alarm-title').textContent = reminder.subject;
+      document.getElementById('alarm-notes').textContent = reminder.note || `Due right now: ${reminder.reminderDate}`;
+      const alarmModal = document.getElementById('alarm-banner-modal');
+      alarmModal.classList.remove('hidden');
+      alarmModal.classList.add('flex');
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(`Reminder Due: ${reminder.subject}`, {
+          body: reminder.note || `Scheduled for today at ${reminder.reminderTime}`
+        });
+      }
+    }
+
+    function snoozeActiveAlarm(minutes = 5) {
+      if (window.ringingReminder) {
+        const now = new Date();
+        const future = new Date(now.getTime() + minutes * 60 * 1000);
+        window.ringingReminder.reminderDate = formatDateToYYYYMMDD(future.getFullYear(), future.getMonth() + 1, future.getDate());
+        window.ringingReminder.reminderTime = `${String(future.getHours()).padStart(2, '0')}:${String(future.getMinutes()).padStart(2, '0')}`;
+        window.ringingReminder.notified = false;
+        if (window.cloudSaveReminder) {
+          window.cloudSaveReminder(window.ringingReminder);
+        }
+        showToast(`Snoozed for ${minutes} minutes`, 'success');
+      }
+      closeAlarmModal();
+    }
+
+    function completeActiveAlarm() {
+      if (window.ringingReminder) {
+        window.ringingReminder.completed = true;
+        if (window.cloudSaveReminder) {
+          window.cloudSaveReminder(window.ringingReminder);
+        }
+        showToast('Marked as completed!', 'success');
+      }
+      closeAlarmModal();
+    }
+
+    function closeAlarmModal() {
+      document.getElementById('alarm-banner-modal').classList.add('hidden');
+      document.getElementById('alarm-banner-modal').classList.remove('flex');
+      window.ringingReminder = null;
+    }
+
+    function renderCalendar() {
+      const grid = document.getElementById('calendar-days-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      const year = window.currentCalendarDate.getFullYear();
+      const month = window.currentCalendarDate.getMonth();
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+      document.getElementById('calendar-month-label').textContent = `${monthNames[month]} ${year}`;
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const prevDays = new Date(year, month, 0).getDate();
+      const todayStr = getTodayYYYYMMDD();
+
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const d = prevDays - i;
+        const cell = document.createElement('div');
+        cell.className = 'p-1.5 border border-slate-100 dark:border-slate-800/40 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 text-slate-300 dark:text-slate-600 text-xs min-h-[75px]';
+        cell.innerHTML = `<span>${d}</span>`;
+        grid.appendChild(cell);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = formatDateToYYYYMMDD(year, month + 1, d);
+        const dayReminders = window.reminders.filter(r => r.reminderDate === dateStr || r.expiryDate === dateStr);
+        const isToday = dateStr === todayStr;
+
+        const cell = document.createElement('div');
+        cell.className = `p-1.5 border rounded-xl text-xs flex flex-col min-h-[75px] cursor-pointer transition ${
+          isToday ? 'border-brand-500 bg-brand-50/40 dark:bg-brand-950/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'
+        }`;
+
+        cell.onclick = () => {
+          openReminderModal();
+          document.getElementById('input-reminder-date').value = dateStr;
+        };
+
+        let badgeSnippet = '';
+        dayReminders.slice(0, 2).forEach(r => {
+          badgeSnippet += `
+            <div class="truncate text-[10px] px-1 py-0.5 rounded font-medium mt-0.5 ${
+              r.completed ? 'bg-slate-100 text-slate-400 line-through' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+            }">
+              ${escapeHtml(r.subject)}
+            </div>
+          `;
+        });
+        if (dayReminders.length > 2) {
+          badgeSnippet += `<span class="text-[9px] text-slate-400 font-bold">+${dayReminders.length - 2} more</span>`;
+        }
+
+        cell.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold ${isToday ? 'w-5 h-5 rounded-full bg-brand-600 text-white flex items-center justify-center text-[10px]' : 'text-slate-700 dark:text-slate-300'}">${d}</span>
+            ${dayReminders.length > 0 ? `<span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>` : ''}
+          </div>
+          <div class="flex-1 overflow-hidden mt-0.5">${badgeSnippet}</div>
+        `;
+
+        grid.appendChild(cell);
+      }
+    }
+
+    function navigateMonth(delta) {
+      if (delta === 0) {
+        window.currentCalendarDate = new Date();
+      } else {
+        window.currentCalendarDate.setMonth(window.currentCalendarDate.getMonth() + delta);
+      }
+      renderCalendar();
+    }
+
+    function updateAllBadges() {
+      const allCount = window.reminders.length;
+      const todayCount = window.reminders.filter(r => isDueToday(r) && !r.completed).length;
+      const n10 = window.reminders.filter(r => isWithinDays(r, 10)).length;
+      const n20 = window.reminders.filter(r => isWithinDays(r, 20)).length;
+      const n30 = window.reminders.filter(r => isWithinDays(r, 30)).length;
+      const n60 = window.reminders.filter(r => isWithinDays(r, 60)).length;
+      const n90 = window.reminders.filter(r => isWithinDays(r, 90)).length;
+      const expCount = window.reminders.filter(r => isExpired(r)).length;
+      const compCount = window.reminders.filter(r => r.completed).length;
+
+      document.getElementById('badge-side-all').textContent = allCount;
+      document.getElementById('badge-side-today').textContent = todayCount;
+      document.getElementById('badge-side-next-10').textContent = n10;
+      document.getElementById('badge-side-next-20').textContent = n20;
+      document.getElementById('badge-side-next-30').textContent = n30;
+      document.getElementById('badge-side-next-60').textContent = n60;
+      document.getElementById('badge-side-next-90').textContent = n90;
+      document.getElementById('badge-side-expired').textContent = expCount;
+      document.getElementById('badge-side-completed').textContent = compCount;
+    }
+
+    function handleSearch(val) {
+      window.searchQuery = val.trim().toLowerCase();
+      renderReminders();
+    }
+
+    function handleSortChange(val) {
+      window.sortOrder = val;
+      renderReminders();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+      const box = document.getElementById('toast-box');
+      const text = document.getElementById('toast-message');
+      const icon = document.getElementById('toast-icon');
+
+      text.textContent = msg;
+      if (type === 'error') {
+        icon.className = 'text-rose-400 shrink-0';
+        icon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+      } else {
+        icon.className = 'text-emerald-400 shrink-0';
+        icon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i>';
+      }
+      if (window.lucide) lucide.createIcons();
+
+      box.classList.remove('translate-y-[-140%]', 'opacity-0');
+      box.classList.add('translate-y-0', 'opacity-100');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        box.classList.remove('translate-y-0', 'opacity-100');
+        box.classList.add('translate-y-[-140%]', 'opacity-0');
+      }, 3500);
+    }
+
+    function toggleDarkMode() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      try {
+        localStorage.setItem('smartremind_theme_myreminder', isDark ? 'dark' : 'light');
+      } catch (e) {}
+      showToast(isDark ? 'Dark mode enabled' : 'Light mode enabled');
+    }
+
+    function toggleSoundAlert() {
+      window.soundEnabled = !window.soundEnabled;
+      const icon = document.getElementById('sound-icon');
+      if (window.soundEnabled) {
+        icon.setAttribute('data-lucide', 'volume-2');
+        icon.className = 'w-4 h-4 text-emerald-600 dark:text-emerald-400';
+        playDueChime();
+        showToast('Chime alerts turned ON');
+      } else {
+        icon.setAttribute('data-lucide', 'volume-x');
+        icon.className = 'w-4 h-4 text-slate-400';
+        showToast('Chime alerts muted');
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function updateLiveClocks() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+      const clockEl = document.getElementById('current-live-clock');
+      const dateEl = document.getElementById('current-live-date');
+      if (clockEl) clockEl.textContent = timeStr;
+      if (dateEl) dateEl.textContent = dateStr;
+
+      checkAlarmDue();
+    }
+
+    // Attach globals to window for inline onclick attributes
+    window.openReminderModal = openReminderModal;
+    window.closeReminderModal = closeReminderModal;
+    window.handleSaveReminder = handleSaveReminder;
+    window.handleExcelFileUpload = handleExcelFileUpload;
+    window.handleSheetChange = handleSheetChange;
+    window.refreshExcelPreviewTable = refreshExcelPreviewTable;
+    window.closeExcelModal = closeExcelModal;
+    window.confirmExcelImport = confirmExcelImport;
+    window.exportToExcel = exportToExcel;
+    window.exportToPDF = exportToPDF;
+    window.switchHorizonFilter = switchHorizonFilter;
+    window.toggleCalendarView = toggleCalendarView;
+    window.renderReminders = renderReminders;
+    window.renderCalendar = renderCalendar;
+    window.toggleMultiSelectMode = toggleMultiSelectMode;
+    window.toggleSelectReminder = toggleSelectReminder;
+    window.handleSelectAllChange = handleSelectAllChange;
+    window.promptDeleteSelectedReminders = promptDeleteSelectedReminders;
+    window.promptDeleteSingleReminder = promptDeleteSingleReminder;
+    window.closeConfirmModal = closeConfirmModal;
+    window.editReminder = editReminder;
+    window.toggleReminderComplete = toggleReminderComplete;
+    window.snoozeActiveAlarm = snoozeActiveAlarm;
+    window.completeActiveAlarm = completeActiveAlarm;
+    window.closeAlarmModal = closeAlarmModal;
+    window.navigateMonth = navigateMonth;
+    window.handleSearch = handleSearch;
+    window.handleSortChange = handleSortChange;
+    window.showToast = showToast;
+    window.toggleDarkMode = toggleDarkMode;
+    window.toggleSoundAlert = toggleSoundAlert;
+    window.getTodayYYYYMMDD = getTodayYYYYMMDD;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        const theme = localStorage.getItem('smartremind_theme_myreminder');
+        if (theme === 'dark' || (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+
+      updateLiveClocks();
+      setInterval(updateLiveClocks, 1000);
+
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeReminderModal();
+          closeExcelModal();
+          closeConfirmModal(false);
+          closeAlarmModal();
+        }
+      });
+
+      document.body.addEventListener('click', () => {
+        getAudioContext();
+      }, { once: true });
+
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
